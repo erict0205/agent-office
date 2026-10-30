@@ -1,6 +1,6 @@
 {
   "name": "agent-office",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "engines": {
     "node": ">=22.13.0"
@@ -13,7 +13,10 @@
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
     "test": "node --test tests/*.test.mjs",
-    "agent": "node bridge/codex-agent.mjs"
+    "agent": "node bridge/codex-agent.mjs",
+    "office:setup": "node bridge/collector/setup.mjs",
+    "office:start": "node bridge/collector/start.mjs",
+    "office:doctor": "node bridge/collector/doctor.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

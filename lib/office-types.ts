@@ -1,10 +1,12 @@
-export type Status = "working" | "idle" | "blocked" | "done" | "error" | "offline";
-export type Agent = { id: string; name: string; role: string; status: Status; task: string; seenAt: number; color: string };
-export type Activity = { id: number; name: string; status: Status; task: string; at: number };
+export type Status = "working" | "idle" | "blocked" | "done" | "error" | "offline" | "unknown";
+export type Agent = { id: string; name: string; role: string; status: Status; task: string; seenAt: number; color: string; deviceId?: string; deviceName?: string; provider?: string; client?: string; sessionKey?: string; source?: string; stateAt?: number };
+export type Activity = { id: number; name: string; status: Status; task: string; at: number; deviceName?: string; provider?: string };
+export type Device = { id: string; name: string; platform: string; tools: string; seenAt: number; connected: boolean };
 export const statuses: Record<Status, { label: string; color: string }> = {
   working: { label: "工作中", color: "#4e8269" }, idle: { label: "休息中", color: "#b78b50" },
   blocked: { label: "等待確認", color: "#c07849" }, done: { label: "已完成", color: "#6388a6" },
   error: { label: "需要協助", color: "#ba635f" }, offline: { label: "已離線", color: "#999c97" },
+  unknown: { label: "狀態未確認", color: "#98906b" },
 };
 export const colors = ["#6b927a", "#c68b70", "#829bb4", "#b39cbd", "#c5ad64", "#6faaa1", "#c67f94", "#9a9c6b"];
 export const demoAgents: Agent[] = [

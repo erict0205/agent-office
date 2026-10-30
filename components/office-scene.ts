@@ -119,6 +119,7 @@ export function createOfficeScene(host: HTMLElement, onSelect: (id: string) => v
     }
   }
   desks.slice(0, 4).forEach(desk);
+  const builtDesks = new Set([0,1,2,3]);
   // Soft lounge corner and coffee counter.
   box(3.4, .025, 3, "#c8c5a9", 3.9, .05, -.9);
   box(2.45, .42, .9, "#c79578", 3.9, .38, -2.4);
@@ -162,7 +163,7 @@ export function createOfficeScene(host: HTMLElement, onSelect: (id: string) => v
   function person(a: Agent, index: number) {
     const group = new T.Group(); group.userData.agentId = a.id; scene.add(group);
     const seat = desks[index % desks.length].clone().add(new T.Vector3(0, 0, .95));
-    if (index >= 4) desk(desks[index], index);
+    if (!builtDesks.has(index)) { desk(desks[index], index); builtDesks.add(index); }
     group.position.copy(seat);
     box(.46, .55, .29, a.color, 0, 1.03, 0, group);
     box(.12, .13, .13, "#e2b28d", 0, 1.39, 0, group);
@@ -188,7 +189,7 @@ export function createOfficeScene(host: HTMLElement, onSelect: (id: string) => v
     for (const [id, p] of people) if (!agents.some(a => a.id === id)) { scene.remove(p.group); disposePerson(p); people.delete(id); }
     agents.forEach((a, i) => {
       if (!people.has(a.id)) people.set(a.id, person(a, i));
-      const p = people.get(a.id)!; p.state = a;
+      const p = people.get(a.id)!; p.state = a; p.seat.copy(desks[i]).add(new T.Vector3(0,0,.95));
       p.target.copy(a.status === "idle" ? new T.Vector3(3.1 + i % 2, 0, .05 + Math.floor(i / 2) * .5) : p.seat);
       p.ring.visible = a.id === selected;
       const key = `${a.name}:${a.status}`;
