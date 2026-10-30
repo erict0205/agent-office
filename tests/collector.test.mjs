@@ -90,6 +90,9 @@ test('Codex compatibility reader handles partial JSONL, sees explicit completion
     await appendFile(file,JSON.stringify(complete).slice(30)+'\n');await reader.poll(); assert.equal(events.at(-1).status,'done');
     assert.equal(JSON.stringify(events).includes('PRIVATE'),false);
     assert.equal(normalizeTranscript({type:'event_msg',payload:{type:'random'}},{session:'s'}),null);
+    assert.equal(normalizeTranscript(started,{session:'s',originator:'codex_cli_rs'}).client,'Codex CLI');
+    assert.equal(normalizeTranscript(started,{session:'s',source:'vscode'}).client,'Codex IDE');
+    assert.equal(normalizeTranscript(started,{session:'s'}).client,'Codex');
   } finally {await rm(dir,{recursive:true,force:true});}
 });
 

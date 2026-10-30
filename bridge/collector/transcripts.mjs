@@ -31,7 +31,7 @@ export class CodexTranscriptReader {
         const { bytesRead } = await h.read(buf, 0, buf.length, 0); await h.close();
         let first; try { first = JSON.parse(buf.subarray(0, bytesRead).toString().split('\n')[0]); } catch { continue; }
         if (first.type !== 'session_meta' || typeof first.payload?.id !== 'string') continue;
-        cursor = { offset: 0, meta: { session: first.payload.id, originator: first.payload.originator }, last: null };
+        cursor = { offset: 0, meta: { session: first.payload.id, originator: first.payload.originator, source: first.payload.source }, last: null };
         this.files.set(file, cursor);
       }
       if (info.size > cursor.offset) {

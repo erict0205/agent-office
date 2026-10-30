@@ -28,7 +28,7 @@ export function normalizeTranscript(record, meta) {
   const status = { task_started: 'working', task_complete: 'done', turn_aborted: 'idle' }[type];
   const observedAt = Date.parse(record.timestamp);
   if (!status || !Number.isFinite(observedAt)) return null;
-  return { provider: 'codex', session: meta.session, status, observedAt, source: 'transcript', turn: typeof record.payload.turn_id === 'string' ? record.payload.turn_id : '', client: /desktop/i.test(meta.originator ?? '') ? 'Codex App' : 'Codex CLI' };
+  return { provider: 'codex', session: meta.session, status, observedAt, source: 'transcript', turn: typeof record.payload.turn_id === 'string' ? record.payload.turn_id : '', client: /desktop/i.test(meta.originator ?? '') ? 'Codex App' : /cli|exec/i.test(meta.originator ?? '') || meta.source === 'cli' ? 'Codex CLI' : /vscode/i.test(meta.originator ?? '') || meta.source === 'vscode' ? 'Codex IDE' : 'Codex' };
 }
 export function toAgent(event, config) {
   const sessionKey = createHash('sha256').update(event.session).digest('hex').slice(0, 12);

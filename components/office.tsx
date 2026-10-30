@@ -15,7 +15,7 @@ export default function Office() {
   const scene = useRef<ReturnType<typeof createOfficeScene> | null>(null);
   const [ready, setReady] = useState(false);
   const [sceneError, setSceneError] = useState(false);
-  const [mode, setMode] = useState<Mode>("demo");
+  const [mode, setMode] = useState<Mode>("live");
   const [demo, setDemo] = useState<Agent[]>(demoAgents);
   const [live, setLive] = useState<Agent[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
