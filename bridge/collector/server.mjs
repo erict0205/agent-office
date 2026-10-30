@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import { agentId, acceptEvent, toAgent, PROVIDERS } from './events.mjs';
+import { mergeWork } from './work.mjs';
 
 function equal(a, b) { const aa = Buffer.from(a ?? ''), bb = Buffer.from(b); return aa.length === bb.length && timingSafeEqual(aa, bb); }
 export function createCollector(config, { token, fetcher = fetch, now = Date.now, onSync = () => {} } = {}) {
@@ -11,13 +12,14 @@ export function createCollector(config, { token, fetcher = fetch, now = Date.now
     if (!config.tools.includes(event.provider)) return false;
     const id = agentId(config.deviceId, event.provider, event.session), previous = sessions.get(id);
     if (!acceptEvent(previous, event)) return false;
-    if (previous?.observedAt === event.observedAt && previous.status === event.status && previous.source === event.source) return true;
+    const work = mergeWork(previous,event);
+    if (previous?.observedAt === event.observedAt && previous.status === event.status && previous.source === event.source && previous.category === work.category && previous.action === work.action) return true;
     if (!previous && sessions.size >= 64) {
       const removable = [...sessions.entries()].filter(([, v]) => !['working','blocked'].includes(v.status)).sort((a,b) => a[1].observedAt-b[1].observedAt)[0];
       if (!removable) return false; sessions.delete(removable[0]);
     }
     // Strip everything except normalized observation fields, including local secrets.
-    sessions.set(id, { provider: event.provider, session: event.session, status: event.status, observedAt: event.observedAt, source: event.source, turn: typeof event.turn === 'string' ? event.turn.slice(0,300) : '', client: String(event.client ?? event.provider).slice(0,40) });
+    sessions.set(id, { provider: event.provider, session: event.session, status: event.status, observedAt: event.observedAt, source: event.source, turn: typeof event.turn === 'string' ? event.turn.slice(0,300) : previous?.turn ?? '', client: String(event.client ?? event.provider).slice(0,40), ...work });
     dirty = true; clearTimeout(timer); timer = setTimeout(() => flush().catch(() => {}), 250); return true;
   }
   async function flush() {

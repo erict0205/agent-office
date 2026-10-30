@@ -1,6 +1,6 @@
 export type Status = "working" | "idle" | "blocked" | "done" | "error" | "offline" | "unknown";
-export type Agent = { id: string; name: string; role: string; status: Status; task: string; seenAt: number; color: string; deviceId?: string; deviceName?: string; provider?: string; client?: string; sessionKey?: string; source?: string; stateAt?: number };
-export type Activity = { id: number; name: string; status: Status; task: string; at: number; deviceName?: string; provider?: string };
+export type Agent = { id: string; name: string; role: string; status: Status; task: string; category?: string; seenAt: number; color: string; deviceId?: string; deviceName?: string; provider?: string; client?: string; sessionKey?: string; source?: string; stateAt?: number };
+export type Activity = { id: number; agentId?: string; name: string; status: Status; task: string; category?: string; at: number; deviceName?: string; provider?: string };
 export type Device = { id: string; name: string; platform: string; tools: string; seenAt: number; connected: boolean };
 export const statuses: Record<Status, { label: string; color: string }> = {
   working: { label: "工作中", color: "#4e8269" }, idle: { label: "休息中", color: "#b78b50" },

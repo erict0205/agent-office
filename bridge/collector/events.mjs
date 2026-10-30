@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto';
+import { humanName, validCategory } from '../../lib/work-labels.mjs';
+import { classifyPrompt, toolWork, taskSummary, mergeWork } from './work.mjs';
 
 export const PROVIDERS = ['codex', 'claude', 'gemini'];
 const labels = { codex: 'Codex', claude: 'Claude Code', gemini: 'Gemini CLI' };
@@ -19,24 +21,35 @@ export function normalizeHook(provider, raw, observedAt = Date.now()) {
   if (event === 'Interrupt') status = 'idle';
   if (event === 'SessionEnd') status = 'offline';
   if (!status) return null;
-  // Project paths, prompts, tool inputs, responses and account data are never copied.
-  return { provider, session, status, observedAt, source: 'hook', client: labels[provider], turn: typeof raw.turn_id === 'string' ? raw.turn_id.slice(0,300) : '' };
+  const resetWork = ['UserPromptSubmit','BeforeAgent','SessionStart'].includes(event);
+  const category = resetWork ? classifyPrompt(raw.prompt) : undefined;
+  const work = ['PreToolUse','BeforeTool','PostToolUse','AfterTool','PostToolUseFailure','PermissionRequest'].includes(event) ? toolWork(raw.tool_name,raw.tool_input) : null;
+  // Only fixed enums leave this normalizer; original text is never copied.
+  return { provider, session, status, observedAt, source: 'hook', client: labels[provider], turn: typeof raw.turn_id === 'string' ? raw.turn_id.slice(0,300) : '', ...(work ?? {}), ...(resetWork ? {resetWork,category,categoryFromPrompt:category!=='general'} : {}) };
 }
-export function normalizeTranscript(record, meta) {
-  if (record?.type !== 'event_msg' || !meta?.session) return null;
+export function normalizeTranscript(record, meta, previous) {
+  if (!meta?.session) return null;
   const type = record.payload?.type;
-  const status = { task_started: 'working', task_complete: 'done', turn_aborted: 'idle' }[type];
+  const userMessage = record.type === 'response_item' && type === 'message' && record.payload.role === 'user';
+  const promptMessage = userMessage || (record.type === 'event_msg' && type === 'user_message');
+  const lifecycle = promptMessage ? (previous?.status === 'working' ? 'working' : null) : record.type === 'event_msg' && { task_started: 'working', task_complete: 'done', turn_aborted: 'idle' }[type];
+  const work = record.type === 'response_item' && ['function_call','custom_tool_call'].includes(type) ? toolWork(record.payload.name,record.payload.arguments ?? record.payload.input) : null;
+  // An isolated tool record cannot make a completed session start again.
+  const status = lifecycle || (work && previous?.status === 'working' ? 'working' : null);
   const observedAt = Date.parse(record.timestamp);
   if (!status || !Number.isFinite(observedAt)) return null;
-  return { provider: 'codex', session: meta.session, status, observedAt, source: 'transcript', turn: typeof record.payload.turn_id === 'string' ? record.payload.turn_id : '', client: /desktop/i.test(meta.originator ?? '') ? 'Codex App' : /cli|exec/i.test(meta.originator ?? '') || meta.source === 'cli' ? 'Codex CLI' : /vscode/i.test(meta.originator ?? '') || meta.source === 'vscode' ? 'Codex IDE' : 'Codex' };
+  const resetWork = ['task_started','user_message'].includes(type) || userMessage;
+  const localText = userMessage && Array.isArray(record.payload.content) ? record.payload.content.filter(c=>c.type==='input_text'&&typeof c.text==='string').map(c=>c.text.slice(0,12000)).join('\n').slice(0,12000) : record.payload.message;
+  const category = type === 'user_message' || userMessage ? classifyPrompt(localText) : undefined;
+  const event = { provider: 'codex', session: meta.session, status, observedAt, source: 'transcript', turn: typeof record.payload.turn_id === 'string' ? record.payload.turn_id : previous?.turn ?? '', client: /desktop/i.test(meta.originator ?? '') ? 'Codex App' : /cli|exec/i.test(meta.originator ?? '') || meta.source === 'cli' ? 'Codex CLI' : /vscode/i.test(meta.originator ?? '') || meta.source === 'vscode' ? 'Codex IDE' : 'Codex', ...(work ?? {}), ...(resetWork ? {resetWork,category,categoryFromPrompt:category!==undefined&&category!=='general'} : {}) };
+  return { ...event, ...mergeWork(previous,event) };
 }
 export function toAgent(event, config) {
   const sessionKey = createHash('sha256').update(event.session).digest('hex').slice(0, 12);
-  const messages = { working: '正在處理本機工作', idle: '等待下一個任務', blocked: '等待你在原工具中確認', done: '本輪工作已結束', offline: '工作階段已結束', unknown: '工作紀錄暫無更新，無法確認目前狀態' };
+  const id = agentId(config.deviceId, event.provider, event.session);
   return {
-    id: agentId(config.deviceId, event.provider, event.session),
-    name: `${labels[event.provider]} · ${sessionKey.slice(0, 4)}`,
-    role: config.deviceName, status: event.status, task: messages[event.status] ?? '狀態待確認',
+    id, name: humanName(id), category:validCategory(event.category),
+    role: config.deviceName, status: event.status, task: taskSummary(event.status,event.category,event.action),
     deviceId: config.deviceId, deviceName: config.deviceName, provider: event.provider,
     client: event.client, sessionKey, source: event.source, stateAt: event.observedAt,
   };

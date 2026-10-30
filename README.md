@@ -62,6 +62,16 @@ hooks 指向此 repo 的安裝位置；搬移資料夾後請重跑設定指令�
 
 `~` 在 Windows 代表使用者目錄。備份在原檔旁，檔名包含 `.agent-office-時間.bak`。裝置設定只含裝置資訊與本機收集器金鑰，**不保存 Sites 服務憑證**。
 
+### 夥伴名稱、工作分類與退場
+
+每個 session 會依固定 ID 取得人名（例如 Milo Chen）。App／CLI 觀察到同一個 session 時沿用同一個名字，重啟收集器與重新整理也不會改名；不同 session 可能剛好同名，可用電腦、工具及工作識別區分。
+
+分類包含功能開發、問題排查、測試驗證、資料研究、文件整理、程式審查、介面設計、部署發布及一般任務。本機依使用者輸入中的關鍵字與工具事件推測分類，網站只收到固定分類與動作摘要（讀取檔案、修改程式、執行檢查等）。不呼叫模型，不上傳原始輸入、命令、路徑或輸出。分類是粗略提示，可能不準確；讀取或執行某個工具不代表操作成功。無法辨識的事件保留一般任務／處理任務。
+
+同一輪任務若能辨識使用者意圖，就保留該分類，直到下一輪重設；例如部署時順便跑測試，分類仍為部署發布，最近動作顯示執行檢查。Codex App 的紀錄相容模式支援已知的使用者訊息及工具呼叫格式；格式改變時可能只剩生命週期狀態。
+
+辦公室預設只顯示工作中、等待確認、需要協助，及最近 5 分鐘內結束／閒置／狀態未確認的工作。超時工作與離線工作進入「歷史」清單，開始新工作就會回到座位。計時使用工作事件時間，裝置持續送心跳不會延後退場。歷史沿用現有的最近 200 個 session／200 筆動態上限，並非永久完整稽核紀錄。點選夥伴可以查看最近幾筆動作；3D 場景仍只呈現辦公室中的夥伴。
+
 ### Codex hooks 的信任
 
 Codex 要求你在工具內執行 **`/hooks`**，檢閱並信任新 hook 定義。此專案不繞過信任檢查。修改 hook 定義後可能需要重新信任；現有聊天可能要在下一輪或重開工作階段後才載入。
@@ -116,6 +126,7 @@ npm run office:doctor
 npm run build
 node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0000_crazy_harrier.sql
 node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0001_curvy_sunfire.sql
+node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0002_sharp_maria_hill.sql
 npm run dev -- --host 127.0.0.1 --port 5173
 ```
 

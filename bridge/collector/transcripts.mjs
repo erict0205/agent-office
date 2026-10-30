@@ -43,7 +43,7 @@ export class CodexTranscriptReader {
           while ((newline = pending.indexOf(10)) !== -1) {
             const line = pending.subarray(0, newline); consumed += newline + 1; pending = pending.subarray(newline + 1);
             let record; try { record = JSON.parse(line.toString()); } catch { continue; }
-            const event = normalizeTranscript(record, cursor.meta);
+            const event = normalizeTranscript(record, cursor.meta, cursor.last);
             if (event) cursor.last = event;
           }
           if (pending.length > 8_000_000) { consumed += pending.length; pending = Buffer.alloc(0); }
