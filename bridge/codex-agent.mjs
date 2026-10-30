@@ -17,6 +17,8 @@ if (values.help) {
 
 let config = { url: process.env.OFFICE_URL, token: process.env.OFFICE_SITE_TOKEN };
 if (values["stdin-config"]) {
+  const rawInput = Boolean(process.stdin.isTTY && process.stdin.setRawMode);
+  if (rawInput) process.stdin.setRawMode(true);
   console.log("Ready for office connection JSON on stdin (input is hidden).");
   process.stdin.setEncoding("utf8");
   const line = await new Promise((res, rej) => {
@@ -24,6 +26,7 @@ if (values["stdin-config"]) {
     const read = chunk => { input += chunk; if (input.includes("\n")) { process.stdin.off("data", read); process.stdin.pause(); try { res(JSON.parse(input.split("\n")[0])); } catch { rej(new Error("連線設定格式不正確")); } } };
     process.stdin.on("data", read); process.stdin.once("end", () => { if (!input.includes("\n")) rej(new Error("缺少連線設定")); });
   });
+  if (rawInput) process.stdin.setRawMode(false);
   config = { ...config, ...line };
 }
 if (!config.url) throw new Error("請設定 OFFICE_URL，指向你的工作室網址。");
