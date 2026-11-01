@@ -3,6 +3,7 @@ import { Agent, Activity, colors } from '@/lib/office-types';
 import { visibleStatus } from '@/lib/agent-protocol.mjs';
 import { agentStatements, cleanupStatements, readBoundedJson, errorResponse } from '@/lib/server-office';
 import { humanName } from '@/lib/work-labels.mjs';
+import { attendanceFor } from '@/lib/office-attendance.mjs';
 
 export const dynamic = 'force-dynamic';
 const noStore = { 'Cache-Control':'no-store' };
@@ -16,7 +17,10 @@ export async function GET() {
       env.DB.prepare('SELECT id,agent_id AS agentId,name,status,task,category,at,device_name AS deviceName,provider FROM events ORDER BY at DESC,id DESC LIMIT 200'),
       env.DB.prepare('SELECT id,name,platform,tools,seen_at AS seenAt FROM devices ORDER BY name LIMIT 32'),
     ]);
-    return Response.json({ agents:(agents.results as Omit<Agent,'color'>[]).map(a=>({...a,name:a.provider!=='legacy'?humanName(a.id):a.name,status:visibleStatus(a.status,a.seenAt,now),color:colors[[...a.id].reduce((sum,c)=>sum+c.charCodeAt(0),0)%colors.length]})),events:(events.results as (Activity & {agentId:string})[]).map(e=>({...e,name:e.provider!=='legacy'?humanName(e.agentId):e.name})),devices:(devices.results as {seenAt:number}[]).map(d=>({...d,connected:now-d.seenAt<=45_000})),at:now },{headers:noStore});
+    return Response.json({ agents:(agents.results as Omit<Agent,'color'>[]).map(a=>{
+      const agent={...a,name:a.provider!=='legacy'?humanName(a.id):a.name,reportedStatus:a.status,status:visibleStatus(a.status,a.seenAt,now),color:colors[[...a.id].reduce((sum,c)=>sum+c.charCodeAt(0),0)%colors.length]};
+      return {...agent,attendance:attendanceFor(agent,now)};
+    }),events:(events.results as (Activity & {agentId:string})[]).map(e=>({...e,name:e.provider!=='legacy'?humanName(e.agentId):e.name})),devices:(devices.results as {seenAt:number}[]).map(d=>({...d,connected:now-d.seenAt<=45_000})),at:now },{headers:noStore});
   } catch(error) { return errorResponse(error); }
 }
 export async function POST(request: Request) {

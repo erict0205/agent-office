@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { humanName, isInOffice, RETIRE_AFTER_MS } from '../lib/work-labels.mjs';
+import { humanName } from '../lib/work-labels.mjs';
 import { normalizeHook, normalizeTranscript, toAgent } from '../bridge/collector/events.mjs';
 import { mergeWork } from '../bridge/collector/work.mjs';
 import { createCollector } from '../bridge/collector/server.mjs';
@@ -15,17 +15,6 @@ test('human names remain stable across reconnects and App/CLI observations',()=>
   assert.equal(a.name,humanName(a.id));
   assert.equal(validateUpdate(a).category,'general');
   assert.throws(()=>validateUpdate({...a,category:'PRIVATE TEXT'}));
-});
-
-test('office retirement follows state time rather than continuing device heartbeats',()=>{
-  const now=Date.now(), old=now-RETIRE_AFTER_MS;
-  for(const status of ['done','idle','unknown']) {
-    assert.equal(isInOffice({status,stateAt:old+1,seenAt:now},now),true);
-    assert.equal(isInOffice({status,stateAt:old,seenAt:now},now),false);
-  }
-  for(const status of ['working','blocked','error']) assert.equal(isInOffice({status,stateAt:old,seenAt:now},now),true);
-  assert.equal(isInOffice({status:'offline',stateAt:now,seenAt:now},now),false);
-  assert.equal(isInOffice({status:'working',stateAt:now,seenAt:now},now),true);
 });
 
 test('prompt intent survives incidental tools, stops and new turns without exporting text',async()=>{

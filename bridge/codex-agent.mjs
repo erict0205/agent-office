@@ -43,7 +43,7 @@ let nextId = 1; const pending = new Map(); let turnFinishedResolve;
 const turnFinished = new Promise(resolve => { turnFinishedResolve = resolve; });
 
 function publish(status = state.status) {
-  state = { ...state, status }; const snapshot = { ...state };
+  state = { ...state, status, stateAt: status === state.status ? state.stateAt : Date.now() }; const snapshot = { ...state };
   const operation = queue.catch(() => {}).then(async () => {
     const headers = { "Content-Type": "application/json" };
     if (config.token) headers["OAI-Sites-Authorization"] = `Bearer ${config.token}`;

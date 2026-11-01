@@ -1,5 +1,6 @@
 export type Status = "working" | "idle" | "blocked" | "done" | "error" | "offline" | "unknown";
-export type Agent = { id: string; name: string; role: string; status: Status; task: string; category?: string; seenAt: number; color: string; deviceId?: string; deviceName?: string; provider?: string; client?: string; sessionKey?: string; source?: string; stateAt?: number };
+export type Attendance = ReturnType<typeof import('./office-attendance.mjs').attendanceFor>;
+export type Agent = { id: string; name: string; role: string; status: Status; reportedStatus?: Status; attendance?: Attendance; task: string; category?: string; seenAt: number; color: string; deviceId?: string; deviceName?: string; provider?: string; client?: string; sessionKey?: string; source?: string; stateAt?: number };
 export type Activity = { id: number; agentId?: string; name: string; status: Status; task: string; category?: string; at: number; deviceName?: string; provider?: string };
 export type Device = { id: string; name: string; platform: string; tools: string; seenAt: number; connected: boolean };
 export const statuses: Record<Status, { label: string; color: string }> = {
