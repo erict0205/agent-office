@@ -36,7 +36,7 @@ export function createCollector(config, { token, writeToken = token ? deriveWrit
         const response = await fetcher(new URL('/api/ingest', config.url), { method: 'POST', headers, redirect: 'error', signal: AbortSignal.timeout(8000), body: JSON.stringify({ device: { id: config.deviceId, name: config.deviceName, platform: config.platform, tools: config.tools }, agents: agents.slice(i,i+20) }) });
         if (!response.ok || (await response.json()).ok !== true) throw new Error(`HTTP ${response.status}`);
       }
-      if(details.size){const batch=[...details.values()].slice(0,6);while(JSON.stringify({events:batch}).length>58000&&batch.length>1)batch.pop();const result=await fetcher(new URL('/api/telemetry',config.url),{method:'POST',headers,redirect:'error',signal:AbortSignal.timeout(8000),body:JSON.stringify({events:batch})});if(!result.ok)throw new Error('private sync failed');for(const event of batch)details.delete(event.id);}
+      if(details.size){const batch=[...details.values()].sort((a,b)=>b.at-a.at).slice(0,6);while(JSON.stringify({events:batch}).length>58000&&batch.length>1)batch.pop();const result=await fetcher(new URL('/api/telemetry',config.url),{method:'POST',headers,redirect:'error',signal:AbortSignal.timeout(8000),body:JSON.stringify({events:batch})});if(!result.ok)throw new Error('private sync failed');for(const event of batch)details.delete(event.id);}
       lastSync = now(); lastError = ''; onSync({ lastSync, count: agents.length });
     } catch { lastError = '無法同步工作室，將於下次心跳重試'; dirty = true; }
     finally { flushing = false; }
@@ -56,7 +56,7 @@ export function createCollector(config, { token, writeToken = token ? deriveWrit
     } catch { if (!res.headersSent) finish(400,{error:'Invalid JSON'}); }
   });
   return {
-    server, record, detail:(event)=>{details.set(event.id,event);if(details.size>256)details.delete(details.keys().next().value);}, flush, health: () => ({ count:sessions.size, lastSync, lastError }),
+    server, record, detail:(event)=>{details.set(event.id,event);if(details.size>256){const oldest=[...details.values()].sort((a,b)=>a.at-b.at)[0];details.delete(oldest.id);}}, flush, health: () => ({ count:sessions.size, lastSync, lastError }),
     start: () => new Promise((resolve, reject) => { server.once('error', reject); server.listen(config.port,'127.0.0.1',resolve); }),
     stop: async () => { closed = true; clearTimeout(timer); await new Promise(resolve => server.close(resolve)); },
   };

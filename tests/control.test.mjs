@@ -10,6 +10,7 @@ import { execFile } from 'node:child_process';
 import { ownerIdentity,publicAgent,publicEvent } from '../lib/office-access.mjs';
 import { redact,privateRecord } from '../bridge/collector/telemetry.mjs';
 import { deriveRunnerToken,deriveWriteToken,writeFingerprint } from '../bridge/collector/write-auth.mjs';
+import { createCollector } from '../bridge/collector/server.mjs';
 import { validWriteToken } from '../lib/write-auth.mjs';
 import { CodexRun,prepareWorkspace,workspaceChanges,taskPrompt,resultEnvelope } from '../bridge/runner/codex.mjs';
 const exec=promisify(execFile);
@@ -70,3 +71,5 @@ test('managed protocol streams evidence, waits for explicit approval and disting
 });
 
 test('large results remain bounded valid JSON rather than losing the evidence structure',()=>{const encoded=resultEnvelope(JSON.stringify({summary:'"'.repeat(25000),tests:Array.from({length:50},()=>({name:'check',status:'passed',detail:'"'.repeat(10000)})),verdict:'pass'}),{files:'x'.repeat(5000)});assert.ok(encoded.length<=18000);assert.equal(JSON.parse(encoded).verdict,'pass');});
+
+test('private collector prioritizes current evidence over startup history',async()=>{const sent=[];const collector=createCollector({deviceId:'test',deviceName:'Test',platform:'darwin',tools:['codex'],url:'http://127.0.0.1',port:0,localKey:'a'.repeat(64)},{fetcher:async(url,options)=>{sent.push({url:String(url),body:JSON.parse(options.body)});return {ok:true,json:async()=>({ok:true})};}});collector.detail({id:'new',at:200,detail:'current'});collector.detail({id:'old',at:100,detail:'history'});await collector.flush();assert.equal(sent.find(s=>s.url.endsWith('/api/telemetry')).body.events[0].id,'new');});
