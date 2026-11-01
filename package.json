@@ -16,7 +16,9 @@
     "agent": "node bridge/codex-agent.mjs",
     "office:setup": "node bridge/collector/setup.mjs",
     "office:start": "node bridge/collector/start.mjs",
-    "office:doctor": "node bridge/collector/doctor.mjs"
+    "office:doctor": "node bridge/collector/doctor.mjs",
+    "office:project": "node bridge/runner/projects.mjs",
+    "office:runner": "node bridge/runner/start.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

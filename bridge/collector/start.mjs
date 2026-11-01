@@ -3,7 +3,7 @@ import { readConfig, readSecretFromStdin } from './config.mjs';
 import { createCollector } from './server.mjs';
 import { CodexTranscriptReader } from './transcripts.mjs';
 
-const { values } = parseArgs({ options: { config:{type:'string'}, 'stdin-config':{type:'boolean'}, 'no-codex-files':{type:'boolean'} } });
+const { values } = parseArgs({ options: { config:{type:'string'}, 'stdin-config':{type:'boolean'}, 'no-codex-files':{type:'boolean'}, details:{type:'boolean'} } });
 const config = await readConfig(values.config);
 let token = process.env.OFFICE_SITE_TOKEN;
 let writeToken=process.env.OFFICE_WRITE_TOKEN;
@@ -13,8 +13,8 @@ if (!['localhost','127.0.0.1','[::1]'].includes(url.hostname) && !token&&!writeT
 const collector = createCollector(config, { token, ...(writeToken?{writeToken}:{}) });
 await collector.start();
 console.log(`Agent Office 收集器已啟動：${config.deviceName}（${config.deviceId}）`);
-console.log('只回報狀態、工具與工作階段識別，不回報對話或專案路徑。');
-const reader = config.tools.includes('codex') && config.codexFiles !== false && !values['no-codex-files'] ? new CodexTranscriptReader({ onEvent: event => collector.record(event) }) : null;
+console.log(values.details?'已啟用擁有者私人紀錄；工作要求、工具內容與回答只供擁有者登入後查看。':'只回報簡要狀態，不回報對話或專案路徑。');
+const reader = config.tools.includes('codex') && config.codexFiles !== false && !values['no-codex-files'] ? new CodexTranscriptReader({ onEvent: event => collector.record(event), ...(values.details?{deviceId:config.deviceId,onDetail:event=>collector.detail(event)}:{}) }) : null;
 let polling = false;
 async function poll() { if (polling || !reader) return; polling = true; try { await reader.poll(); } catch { console.error('部分 Codex 工作紀錄無法讀取，其他來源繼續運作。'); } finally { polling = false; } }
 await poll(); await collector.flush();

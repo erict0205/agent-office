@@ -1,3 +1,4 @@
+import { publicAgent,publicEvent } from '@/lib/office-access.mjs';
 import { env } from 'cloudflare:workers';
 import { Agent, Activity, colors } from '@/lib/office-types';
 import { visibleStatus } from '@/lib/agent-protocol.mjs';
@@ -19,8 +20,8 @@ export async function GET() {
     ]);
     return Response.json({ agents:(agents.results as Omit<Agent,'color'>[]).map(a=>{
       const agent={...a,name:a.provider!=='legacy'?humanName(a.id):a.name,reportedStatus:a.status,status:visibleStatus(a.status,a.seenAt,now),color:colors[[...a.id].reduce((sum,c)=>sum+c.charCodeAt(0),0)%colors.length]};
-      return {...agent,attendance:attendanceFor(agent,now)};
-    }),events:(events.results as (Activity & {agentId:string})[]).map(e=>({...e,name:e.provider!=='legacy'?humanName(e.agentId):e.name})),devices:(devices.results as {seenAt:number}[]).map(d=>({...d,connected:now-d.seenAt<=45_000})),at:now },{headers:noStore});
+      return publicAgent({...agent,attendance:attendanceFor(agent,now)});
+    }),events:(events.results as (Activity & {agentId:string})[]).map(e=>publicEvent({...e,name:e.provider!=='legacy'?humanName(e.agentId):e.name})),devices:[],connectedDevices:(devices.results as {seenAt:number}[]).filter(d=>now-d.seenAt<=45_000).length,at:now },{headers:noStore});
   } catch(error) { return errorResponse(error); }
 }
 export async function POST(request: Request) {

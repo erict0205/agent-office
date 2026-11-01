@@ -2,13 +2,14 @@ import { open, readdir, stat } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
+import { privateRecord } from './telemetry.mjs';
 import { normalizeTranscript } from './events.mjs';
 
 // Optional Codex compatibility reader. JSONL is not a stable public protocol;
 // only explicit lifecycle records are interpreted. No text is retained/uploaded.
 export class CodexTranscriptReader {
-  constructor({ root = join(process.env.CODEX_HOME ?? join(homedir(), '.codex'), 'sessions'), onEvent, now = Date.now }) {
-    this.root = root; this.onEvent = onEvent; this.files = new Map(); this.now = now;
+  constructor({ root = join(process.env.CODEX_HOME ?? join(homedir(), '.codex'), 'sessions'), onEvent, onDetail, deviceId, now = Date.now }) {
+    this.root = root; this.onEvent = onEvent; this.onDetail=onDetail;this.deviceId=deviceId; this.files = new Map(); this.now = now;
   }
   async candidates() {
     const result = [];
@@ -31,7 +32,7 @@ export class CodexTranscriptReader {
         const { bytesRead } = await h.read(buf, 0, buf.length, 0); await h.close();
         let first; try { first = JSON.parse(buf.subarray(0, bytesRead).toString().split('\n')[0]); } catch { continue; }
         if (first.type !== 'session_meta' || typeof first.payload?.id !== 'string') continue;
-        cursor = { offset: 0, meta: { session: first.payload.id, originator: first.payload.originator, source: first.payload.source }, last: null };
+        cursor = { offset: 0, meta: { session: first.payload.id, originator: first.payload.originator, source: first.payload.source }, last: null, calls:new Map() };
         this.files.set(file, cursor);
       }
       if (info.size > cursor.offset) {
@@ -43,6 +44,7 @@ export class CodexTranscriptReader {
           while ((newline = pending.indexOf(10)) !== -1) {
             const line = pending.subarray(0, newline); consumed += newline + 1; pending = pending.subarray(newline + 1);
             let record; try { record = JSON.parse(line.toString()); } catch { continue; }
+            if(this.onDetail){const detail=privateRecord(record,cursor.meta,this.deviceId,cursor.calls);if(detail&&detail.at>=this.now()-86400000&&detail.at<=this.now()+300000)await this.onDetail(detail);}
             const event = normalizeTranscript(record, cursor.meta, cursor.last);
             if (event) cursor.last = event;
           }

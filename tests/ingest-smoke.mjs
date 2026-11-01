@@ -16,8 +16,8 @@ assert.equal(data.agents.find(a=>a.id===make(devices[0],'',0).id).category,'test
 assert.equal(data.agents.find(a=>a.id===make(devices[0],'',0).id).reportedStatus,'done');
 assert.equal(typeof data.agents.find(a=>a.id===make(devices[0],'',0).id).attendance.present,'boolean');
 assert.equal(typeof data.agents.find(a=>a.id===make(devices[0],'',0).id).attendance.reason,'string');
-assert.equal(data.devices.find(d=>d.id==='test-home').connected,true);
-assert.equal(data.events.filter(e=>e.deviceName==='測試家裡'&&e.task==='本機多裝置驗證'&&e.status==='working').length>=1,true);
+assert.equal(data.devices.length,0);assert.equal(data.connectedDevices>=2,true);
+assert.equal(data.events.filter(e=>e.agentId===make(devices[0],'',0).id&&e.status==='working').length>=1,true);
 assert.equal((await post({device:devices[0],agents:[{...make(devices[0],'working',now+2),category:'private raw text'}]})).status,400);
 for(const device of devices) await post({device,agents:[make(device,'offline',now+2)]});
 console.log('批次回報驗證通過：雙裝置隔離、工作階段去重、舊事件不覆蓋、新裝置心跳。');

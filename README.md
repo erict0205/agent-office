@@ -66,7 +66,7 @@ hooks 指向此 repo 的安裝位置；搬移資料夾後請重跑設定指令�
 
 每個 session 會依固定 ID 取得人名（例如 Milo Chen）。App／CLI 觀察到同一個 session 時沿用同一個名字，重啟收集器與重新整理也不會改名；不同 session 可能剛好同名，可用電腦、工具及工作識別區分。
 
-分類包含功能開發、問題排查、測試驗證、資料研究、文件整理、程式審查、介面設計、部署發布及一般任務。本機依使用者輸入中的關鍵字與工具事件推測分類，網站只收到固定分類與動作摘要（讀取檔案、修改程式、執行檢查等）。不呼叫模型，不上傳原始輸入、命令、路徑或輸出。分類是粗略提示，可能不準確；讀取或執行某個工具不代表操作成功。無法辨識的事件保留一般任務／處理任務。
+分類包含功能開發、問題排查、測試驗證、資料研究、文件整理、程式審查、介面設計、部署發布及一般任務。本機依使用者輸入中的關鍵字與工具事件推測分類，公開畫面只收到固定分類與動作摘要（讀取檔案、修改程式、執行檢查等）。分類不呼叫模型。預設不上傳原始輸入、命令、路徑或輸出；--details 另將詳細紀錄送到擁有者專用接口。分類是粗略提示，可能不準確；讀取或執行某個工具不代表操作成功。無法辨識的事件保留一般任務／處理任務。
 
 同一輪任務若能辨識使用者意圖，就保留該分類，直到下一輪重設；例如部署時順便跑測試，分類仍為部署發布，最近動作顯示執行檢查。Codex App 的紀錄相容模式支援已知的使用者訊息及工具呼叫格式；格式改變時可能只剩生命週期狀態。
 
@@ -131,19 +131,20 @@ npm run office:doctor
 
 收集器每 15 秒回報心跳，狀態變更後會提早同步；網站每 5 秒更新。事件用狀態時間排序，延遲到達的舊事件不能覆蓋新狀態。短暫斷線會保留記憶體內狀態並重試。每台收集器最多保留 64 個工作階段，雲端清單最多讀取 200 筆，最近動態保留 200 筆。
 
-上傳白名單只有：雜湊工作階段 ID、工具、裝置別名、狀態、通用工作描述、來源與時間。不上傳 prompt、模型回覆、終端輸出、工具參數、專案路徑或帳號資料。工作階段原始 ID 只在本機使用；Office 使用雜湊識別。狀態收集使用一般 Node 程式，不額外呼叫模型。
+預設的簡要狀態上傳白名單只有：雜湊工作階段 ID、工具、裝置別名、狀態、通用工作描述、來源與時間。不上傳 prompt、模型回覆、終端輸出、工具參數、專案路徑或帳號資料。工作階段原始 ID 只在本機使用；Office 使用雜湊識別。狀態收集使用一般 Node 程式，不額外呼叫模型。
 
 「完成」代表收到本輪結束訊號，不能用它代替程式測試或業務驗收。相容 reader 沒有足夠訊號時顯示未知，不把沉默當成成功。
 
 ## 開發網站與驗證
 
-新增的資料庫 migration 是 `drizzle/0001_curvy_sunfire.sql`，第一版既有 migration 不變。新本機資料庫按順序執行 `0000`、`0001`；已完成第一版資料庫只套用 `0001` 一次。
+資料庫 migration 依 `drizzle/meta/_journal.json` 順序套用；既有 migration 不改寫。新增私人工作控制台的資料表在 `0003`，新本機資料庫需套用全部檔案，既有資料庫只套用尚未執行的檔案一次。
 
 ```text
 npm run build
 node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0000_crazy_harrier.sql
 node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0001_curvy_sunfire.sql
 node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0002_sharp_maria_hill.sql
+node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0003_lean_shadowcat.sql
 npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
@@ -185,3 +186,39 @@ GitHub 保存使用者原始碼；Sites 使用自己的部署來源遠端。推�
 - 既有隱藏 stdin 的 `{token:...}` 啟動方式會自動衍生更新金鑰。也可只提供 `{writeToken:...}` 或由安全來源注入 `OFFICE_WRITE_TOKEN`；公開網站無需額外的私人存取 header。兩種金鑰都只留在程序記憶體。
 - 管理者可用 `node bridge/collector/write-auth.mjs --fingerprint-stdin`，在隱藏輸入提供服務憑證，只取得指紋，再透過 Sites 環境變數工具設定為 secret 並部署。服務憑證輪替時，須重新設定指紋與啟動各台收集器；不要把更新金鑰放進前端或 Git。
 - 本機 HTTP 測試固定使用公開的測試金鑰 `a` 重複 64 次；只可用於本機。將其 SHA-256 放入本機 `.dev.vars` 後執行兩個 smoke 檔；不要套用到正式環境。
+
+## 擁有者控制台與真正的協作
+
+公開訪客與其他登入帳號只能取得固定分類的簡短狀態；`/api/office` 不回傳原始工作要求、指令、輸出、專案／裝置別名、差異或原始 session 識別。打招呼、咖啡與加油仍是訪客瀏覽器內的情境互動。
+
+管理資料放在獨立的 `/api/control`，每次讀寫都驗證 Sites 提供的登入身分。首次綁定僅允許 native Site 所有者的 email（runtime secret `OFFICE_OWNER_EMAIL`），成功後以此 Site 的穩定 user ID 綁定，其他帳號即使登入也不會取得權限。更新操作另檢查同來源與操作標記；服務憑證不等於管理者登入。頁面右上角的「擁有者控制台」或底部「擁有者登入」是入口。
+
+### 觀察既有 Codex App／CLI 的詳細活動
+
+```text
+npm run office:start -- --stdin-config --details
+```
+
+用既有隱藏 stdin 提供服務憑證。`--details` 明確開啟私人紀錄：同步最近一天的工作要求、已提供的最終回答、工具參數和輸出。相容 reader 不解析模型內部推理。常見憑證會遮罩，但原始公司工作內容仍只供擁有者查看；若不希望同步詳細內容，省略 `--details`。既有工作仍在原工具操作，Office 不接管其對話。
+
+### 登記可以派工的本機專案
+
+每台電腦先以 `office:setup` 設定裝置，再登記 Git 專案。以下路徑換成本機實際位置；Windows 可使用 `C:/...` 路徑：
+
+```text
+npm run office:project -- --id agent-office --name "Agent Office" --path /absolute/path/agent-office --worktrees /absolute/path/managed-worktrees
+npm run office:runner -- --stdin-config
+```
+
+- 本機專案清單在 `~/.agent-office/projects.json`；只含授權的專案路徑與工作目錄位置，不含雲端憑證。路徑不接受網頁任意指定。
+- 執行器使用本機已登入的 Codex CLI，從 `model/list` 選其預設模型；實際使用的模型記在私人活動紀錄。每份工作建立自己的 Codex thread。
+- `office:runner` 透過隱藏 stdin 接收 `{token:...}`，衍生另一組執行器金鑰。正式 runtime secret `OFFICE_RUNNER_TOKEN_SHA256` 只保存該金鑰的 SHA-256 指紋，與狀態收集器金鑰分開；可用 `node bridge/runner/start.mjs --fingerprint-stdin` 取得指紋。憑證輪替後須更新指紋、部署並重啟。
+- 網站每台執行器一次只交付一份工作，離線時排隊。每份協作使用同一個獨立 git worktree，依序交給開發、測試、審查；不自動 merge、push、刪除工作目錄。
+- 工作從本機已提交的 HEAD 建立，不包含原 checkout 未提交內容；多台電腦需各自同步 Git。執行結果包含工作目錄與分支位置，供你在本機檢查。
+- 權限要求送到擁有者畫面，由你允許這一次或拒絕；額外的 permissions 類型不自動授予。支援補充要求、停止整組工作、檢查後重試、退回修改和人工驗收。
+- 連線租約逾時不會自動重跑，會停止本機程序並標記待檢查，避免重複修改。程序關閉或電腦斷電可能留下已執行的變更，重試前先檢查。
+- 「本輪結束」是 Codex 回合結果；測試清單是角色回報，可與活動中的指令與 exit code 核對。最終狀態由你驗收，不能以角色的 pass 直接替代驗收。
+
+工作控制台可檢視活動、指令輸出、程式差異、交付摘要、測試回報、產出位置和用量事件。這些紀錄有大小上限，私人活動最多保留近期 3,000 筆，單次讀取最近 100 筆，超過預覽上限需到本機檢查。真正派工會使用 Codex 模型額度；觀看紀錄與情境動畫不呼叫模型。
+
+本機額外驗證：`.dev.vars` 使用測試用收集器金鑰 `a` ×64、執行器金鑰 `b` ×64 的 SHA-256，以及 `OFFICE_OWNER_EMAIL=seedy@sites.test`，啟動 dev 後執行 `node tests/control-smoke.mjs`。測試涵蓋匿名／偽造身分拒絕、CSRF、兩種服務權限分離、私人資料隔離、同時領取去重、確認／回覆、三階段交接與取消。測試 Cookie 只供 Sites 本機預覽使用，正式環境不接受。

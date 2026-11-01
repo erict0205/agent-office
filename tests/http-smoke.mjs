@@ -10,7 +10,7 @@ assert.equal((await send(a)).status, 200);
 const data = await (await fetch(url)).json();
 const saved = data.agents.find(row => row.id === a.id);
 assert.equal(saved.status, "working"); assert.ok(saved.seenAt > 0);
-assert.equal(data.events.filter(row => row.name === a.name && row.task === a.task).length, 1, "相同心跳不重複建立動態");
+assert.equal(data.events.filter(row => row.agentId === a.id && row.status === a.status).length, 1, "相同心跳不重複建立動態");
 assert.equal((await send({ ...a, status: "invalid" })).status, 400);
 assert.equal((await send({ ...a, task: "x".repeat(5000) })).status, 413);
 assert.equal((await send(a, { Origin: base.origin })).status, 403);
