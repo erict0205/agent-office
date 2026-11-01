@@ -16,7 +16,7 @@ if (values.help) {
   process.exit(0);
 }
 
-let config = { url: process.env.OFFICE_URL, token: process.env.OFFICE_SITE_TOKEN };
+let config = { url: process.env.OFFICE_URL, token: process.env.OFFICE_SITE_TOKEN, writeToken: process.env.OFFICE_WRITE_TOKEN };
 if (values["stdin-config"]) {
   const rawInput = Boolean(process.stdin.isTTY && process.stdin.setRawMode);
   if (rawInput) process.stdin.setRawMode(true);
@@ -34,7 +34,7 @@ if (!config.url) throw new Error("請設定 OFFICE_URL，指向你的工作室�
 const origin = new URL(config.url);
 const local = ["localhost", "127.0.0.1", "[::1]"].includes(origin.hostname);
 if (origin.protocol !== "https:" && !(local && origin.protocol === "http:")) throw new Error("雲端工作室必須使用 HTTPS。");
-if (!local && !config.token) throw new Error("私人工作室需要 OFFICE_SITE_TOKEN 服務存取憑證。");
+if (!config.token && !config.writeToken) throw new Error("需要 OFFICE_SITE_TOKEN 或 OFFICE_WRITE_TOKEN 更新憑證。");
 if (!values.check && !values.prompt) throw new Error("請用 --prompt 提供任務，或用 --check 檢查連線。");
 
 const cwd = resolve(values.cwd ?? process.cwd());
@@ -47,7 +47,7 @@ function publish(status = state.status) {
   state = { ...state, status, stateAt: status === state.status ? state.stateAt : Date.now() }; const snapshot = { ...state };
   const operation = queue.catch(() => {}).then(async () => {
     const headers = { "Content-Type": "application/json" };
-    if(config.token)headers['X-Office-Token']=deriveWriteToken(config.token);
+    headers['X-Office-Token']=config.writeToken??deriveWriteToken(config.token);
     if (config.token) headers["OAI-Sites-Authorization"] = `Bearer ${config.token}`;
     const response = await fetch(new URL("/api/office", origin), { method: "POST", headers, body: JSON.stringify(snapshot), redirect: "error", signal: AbortSignal.timeout(10_000) });
     if (!response.ok) throw new Error(`工作室同步失敗（HTTP ${response.status}），請確認網址與憑證。`);
@@ -73,7 +73,7 @@ process.once("SIGINT", () => shutdown(0)); process.once("SIGTERM", () => shutdow
 
 try {
   await publish();
-  const childEnv = { ...process.env }; delete childEnv.OFFICE_SITE_TOKEN; delete childEnv.OFFICE_URL;
+  const childEnv = { ...process.env }; delete childEnv.OFFICE_SITE_TOKEN; delete childEnv.OFFICE_WRITE_TOKEN; delete childEnv.OFFICE_URL;
   child = spawn("codex", ["app-server", "--listen", "stdio://"], { cwd, env: childEnv, stdio: ["pipe", "pipe", "pipe"] });
   child.once("error", () => { console.error("無法啟動 Codex，請確認 Codex CLI 已安裝。"); shutdown(1, "error"); });
   // Never copy the server's diagnostic output or model content to the hosted Site.
