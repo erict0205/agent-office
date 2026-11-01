@@ -2,7 +2,7 @@
 
 一間用 Three.js 從零畫出的辦公室，集中顯示 Windows、Mac、Codex、Claude Code、Gemini CLI 的工作狀態。
 
-網站： https://eric-agent-office.aglowant130.chatgpt.site （維持擁有者私人存取）
+網站： https://eric-agent-office.aglowant130.chatgpt.site （公開簡要狀態，詳細紀錄與操作限擁有者）
 
 ## 0.2 版的連線方式
 
