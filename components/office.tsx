@@ -63,6 +63,8 @@ export default function Office() {
   const activeCount = officeAgents.filter(a => (a.attendance?.sceneStatus ?? a.status) === "working").length;
   const agentActivity = activity.filter(e => e.agentId === agent?.id || (!e.agentId && e.name === agent?.name)).slice(0,4);
 
+  useEffect(()=>{if(mode==="live"&&agents.length&&!agents.some(a=>a.id===selected))setSelected(agents[0].id);},[mode,agents,selected]);
+
   function interact(id:string,action='greet') {
     setSelected(id);
     const target=allAgents.find(a=>a.id===id);if(!target)return;
