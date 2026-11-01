@@ -2,9 +2,10 @@ import { createServer } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import { agentId, acceptEvent, toAgent, PROVIDERS } from './events.mjs';
 import { mergeWork } from './work.mjs';
+import { deriveWriteToken } from './write-auth.mjs';
 
 function equal(a, b) { const aa = Buffer.from(a ?? ''), bb = Buffer.from(b); return aa.length === bb.length && timingSafeEqual(aa, bb); }
-export function createCollector(config, { token, fetcher = fetch, now = Date.now, onSync = () => {} } = {}) {
+export function createCollector(config, { token, writeToken = token ? deriveWriteToken(token) : '', fetcher = fetch, now = Date.now, onSync = () => {} } = {}) {
   const sessions = new Map(); let timer, flushing = false, dirty = false, closed = false;
   let lastSync = 0, lastError = '', lastAttempt = 0;
   function record(event) {
@@ -28,6 +29,7 @@ export function createCollector(config, { token, fetcher = fetch, now = Date.now
       for (const [id, event] of sessions) if (event.observedAt < now() - 86_400_000) sessions.delete(id);
       const agents = [...sessions.values()].map(e => toAgent(e, config));
       const headers = { 'Content-Type': 'application/json' };
+      if(writeToken)headers['X-Office-Token']=writeToken;
       if (token) headers['OAI-Sites-Authorization'] = `Bearer ${token}`;
       for (let i = 0; i < Math.max(1, agents.length); i += 20) {
         const response = await fetcher(new URL('/api/ingest', config.url), { method: 'POST', headers, redirect: 'error', signal: AbortSignal.timeout(8000), body: JSON.stringify({ device: { id: config.deviceId, name: config.deviceName, platform: config.platform, tools: config.tools }, agents: agents.slice(i,i+20) }) });

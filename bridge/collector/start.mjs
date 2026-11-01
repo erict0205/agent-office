@@ -6,10 +6,11 @@ import { CodexTranscriptReader } from './transcripts.mjs';
 const { values } = parseArgs({ options: { config:{type:'string'}, 'stdin-config':{type:'boolean'}, 'no-codex-files':{type:'boolean'} } });
 const config = await readConfig(values.config);
 let token = process.env.OFFICE_SITE_TOKEN;
-if (values['stdin-config']) { const secret = await readSecretFromStdin(); token = secret.token; }
+let writeToken=process.env.OFFICE_WRITE_TOKEN;
+if (values['stdin-config']) { const secret = await readSecretFromStdin(); token = secret.token; writeToken=secret.writeToken; }
 const url = new URL(config.url);
-if (!['localhost','127.0.0.1','[::1]'].includes(url.hostname) && !token) throw new Error('需要 Sites 服務存取憑證；請透過隱藏 stdin 或 OFFICE_SITE_TOKEN 傳入。');
-const collector = createCollector(config, { token });
+if (!['localhost','127.0.0.1','[::1]'].includes(url.hostname) && !token&&!writeToken) throw new Error('需要收集器更新憑證；請透過隱藏 stdin 或 OFFICE_SITE_TOKEN 傳入。');
+const collector = createCollector(config, { token, ...(writeToken?{writeToken}:{}) });
 await collector.start();
 console.log(`Agent Office 收集器已啟動：${config.deviceName}（${config.deviceId}）`);
 console.log('只回報狀態、工具與工作階段識別，不回報對話或專案路徑。');

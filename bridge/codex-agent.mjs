@@ -3,6 +3,7 @@ import { createInterface } from "node:readline";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { statusFromNotification, validateUpdate } from "../lib/agent-protocol.mjs";
+import { deriveWriteToken } from './collector/write-auth.mjs';
 
 const { values } = parseArgs({ options: {
   name: { type: "string", default: "Eric" }, id: { type: "string", default: "codex-eric" },
@@ -46,6 +47,7 @@ function publish(status = state.status) {
   state = { ...state, status, stateAt: status === state.status ? state.stateAt : Date.now() }; const snapshot = { ...state };
   const operation = queue.catch(() => {}).then(async () => {
     const headers = { "Content-Type": "application/json" };
+    if(config.token)headers['X-Office-Token']=deriveWriteToken(config.token);
     if (config.token) headers["OAI-Sites-Authorization"] = `Bearer ${config.token}`;
     const response = await fetch(new URL("/api/office", origin), { method: "POST", headers, body: JSON.stringify(snapshot), redirect: "error", signal: AbortSignal.timeout(10_000) });
     if (!response.ok) throw new Error(`工作室同步失敗（HTTP ${response.status}），請確認網址與憑證。`);

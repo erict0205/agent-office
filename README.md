@@ -124,7 +124,7 @@ npm run office:doctor
 - 設定時 `--dry-run`：只檢查將修改的檔案，不寫入。
 - 設定或啟動時 `--config /absolute/device.json`：使用另一份裝置設定。
 - 設定或啟動時 `--no-codex-files`：停用 Codex 工作紀錄相容 reader，只依賴 hooks。
-- 設定時 `--url http://127.0.0.1:5173`：只連本機開發網站，不需要 Sites 憑證。
+- 設定時 `--url http://127.0.0.1:5173`：只連本機開發網站；需用 OFFICE_WRITE_TOKEN 提供測試用更新金鑰，並在忽略追蹤的 `.dev.vars` 設定相同金鑰的 SHA-256 指紋。
 - 設定時 `--port 47832`：變更收集器本機連接埠。
 
 ## 狀態、排序與隱私
@@ -172,6 +172,16 @@ HTTP smoke 測試只允許本機網址，會在本機資料庫建立測試員工
 
 第一版的 `npm run agent` 仍保留，供需要透過程式啟動獨立唯讀 Codex 任務時使用；日常 App／CLI 的狀態監看改用收集器。
 
-GitHub 保存使用者原始碼；Sites 使用自己的部署來源遠端。推送 GitHub 不會自動觸發部署。更新重用 `.openai/hosting.json` 中既有 Site ID，維持原本私人權限；正式 migration 由 Sites 部署套用，本機測試資料不會上傳。若未來要對其他人開放網站，先加入更新端授權與資料隔離，不能只切換分享設定。
+GitHub 保存使用者原始碼；Sites 使用自己的部署來源遠端。推送 GitHub 不會自動觸發部署。更新重用 `.openai/hosting.json` 中既有 Site ID，保留當時的分享權限；正式 migration 由 Sites 部署套用，本機測試資料不會上傳。網站目前公開唯讀，訪客可查看狀態與操作本機角色互動；所有狀態更新均需獨立收集器金鑰。
 
 官方參考：[Codex hooks](https://learn.chatgpt.com/docs/hooks)、[Claude Code hooks](https://code.claude.com/docs/en/hooks)、[Gemini CLI hooks](https://geminicli.com/docs/hooks/reference/)、[Sites](https://learn.chatgpt.com/docs/sites)。
+
+
+### 公開觀看、收集器更新與角色互動
+
+- 分享網址即可觀看，不需要連接自己的 Agent。頁面的互動是瀏覽器中的情境短句與手勢，不會發送工作指令，也不呼叫模型、不增加 token 用量。
+- 每張桌子的畫面依該座位的角色決定：工作中顯示分類畫面與活動動畫；離座／休息顯示螢幕保護程式；下班或空位關閉。畫面是示意，沒有真實程式碼或操作結果。
+- `POST /api/office` 與 `POST /api/ingest` 需 `X-Office-Token`。收集器以 Sites 服務憑證衍生範圍限定的 HMAC-SHA256 更新金鑰（識別字 `agent-office/ingest/v1`），服務端只保存其 SHA-256 指紋 `OFFICE_INGEST_TOKEN_SHA256`，以 Sites runtime secret 設定。缺少設定時拒絕全部寫入。
+- 既有隱藏 stdin 的 `{token:...}` 啟動方式會自動衍生更新金鑰。也可只提供 `{writeToken:...}` 或由安全來源注入 `OFFICE_WRITE_TOKEN`；公開網站無需額外的私人存取 header。兩種金鑰都只留在程序記憶體。
+- 管理者可用 `node bridge/collector/write-auth.mjs --fingerprint-stdin`，在隱藏輸入提供服務憑證，只取得指紋，再透過 Sites 環境變數工具設定為 secret 並部署。服務憑證輪替時，須重新設定指紋與啟動各台收集器；不要把更新金鑰放進前端或 Git。
+- 本機 HTTP 測試固定使用公開的測試金鑰 `a` 重複 64 次；只可用於本機。將其 SHA-256 放入本機 `.dev.vars` 後執行兩個 smoke 檔；不要套用到正式環境。

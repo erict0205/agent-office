@@ -1,5 +1,11 @@
 import { env } from 'cloudflare:workers';
 import { validateUpdate } from './agent-protocol.mjs';
+import { validWriteToken } from './write-auth.mjs';
+
+export async function requireOfficeWriter(request: Request) {
+  if(!env.OFFICE_INGEST_TOKEN_SHA256)throw new HttpError(503,'狀態更新憑證尚未設定');
+  if(!await validWriteToken(request.headers.get('X-Office-Token'),env.OFFICE_INGEST_TOKEN_SHA256))throw new HttpError(401,'需要有效的收集器更新憑證');
+}
 
 export async function readBoundedJson(request: Request, limit: number) {
   if (request.headers.has('origin') || request.headers.has('sec-fetch-site')) throw new HttpError(403, '請由本機連線程式更新狀態');

@@ -1,4 +1,5 @@
 import * as T from "three";
+import { createDeskScreen } from "./desk-screen";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { Agent, statuses } from "@/lib/office-types";
 import { deskPositions, zoneDefinitions, planOfficeLife, station, walkingRoute } from "@/lib/office-life.mjs";
@@ -113,6 +114,7 @@ export function createOfficeScene(host: HTMLElement, onSelect: (id: string) => v
   box(.18,.62,1.7,"#b4bba2",5.05,.35,5.35);
   for(const z of [-5.1,1.8]) {box(.6,.55,.9,"#c6b392",-1.25,.33,z);plant(-1.25,z,.58);}
   const desks=deskPositions.map(v=>new T.Vector3(...v as [number,number,number]));
+  const screens:ReturnType<typeof createDeskScreen>[]=[];
   function desk(v: T.Vector3, i: number) {
     const { x, z } = v;
     box(2.5, .14, 1.3, "#bca07a", x, 1, z);
@@ -121,8 +123,7 @@ export function createOfficeScene(host: HTMLElement, onSelect: (id: string) => v
     box(.48, .045, .25, "#485950", x, 1.14, z - .2);
     box(.07, .36, .07, "#485950", x, 1.34, z - .3);
     box(1.08, .72, .075, "#344b43", x, 1.65, z - .32);
-    box(.95, .6, .02, "#a8c6b2", x, 1.65, z - .273);
-    for (let j = 0; j < 4; j++) box(.28 + (j % 2) * .28, .026, .025, "#638c76", x - .18, 1.83 - j * .11, z - .256);
+    const screen=createDeskScreen();screen.mesh.position.set(x,1.65,z-.27);scene.add(screen.mesh);screens.push(screen);
     box(.65, .03, .23, "#eeeae0", x, 1.14, z + .27);
     cylinder(.09, .075, .17, "#f3ede0", x + .85, 1.2, z + .15);
     cylinder(.07, .07, .006, "#705541", x + .85, 1.29, z + .15);
@@ -198,7 +199,7 @@ export function createOfficeScene(host: HTMLElement, onSelect: (id: string) => v
   const tail = cylinder(.04, .04, .45, "#bf895f", -.35, .43, 0, cat); tail.rotation.z = -.7;
   void catBody;
 
-  type Person = { group:T.Group; arms:T.Group[]; legs:T.Group[]; ring:T.Mesh; name:T.Sprite; state:Agent; target:T.Vector3; seat:T.Vector3; labelKey:string; zone:Zone; slot:number; route:T.Vector3[]; trail:T.Vector3[]; origin: {zone:Zone;slot:number;seat:T.Vector3}; paddle:T.Group; cup:T.Group; controller:T.Group; moving:boolean; phase:number };
+  type Person = { bubble:T.Sprite; bubbleUntil:number; gesture:string; group:T.Group; arms:T.Group[]; legs:T.Group[]; ring:T.Mesh; name:T.Sprite; state:Agent; target:T.Vector3; seat:T.Vector3; labelKey:string; zone:Zone; slot:number; route:T.Vector3[]; trail:T.Vector3[]; origin: {zone:Zone;slot:number;seat:T.Vector3}; paddle:T.Group; cup:T.Group; controller:T.Group; moving:boolean; phase:number };
   const people = new Map<string, Person>(); let selected = ""; let current: Agent[] = [];
   function label(agent: Agent) {
     const canvas = document.createElement("canvas"); canvas.width = 512; canvas.height = 160;
@@ -229,6 +230,7 @@ export function createOfficeScene(host: HTMLElement, onSelect: (id: string) => v
     ring.rotation.x = -Math.PI / 2; ring.position.y = .055; group.add(ring);
     const name = new T.Sprite(new T.SpriteMaterial({ map: label(a), depthTest: false, transparent: true }));
     name.position.y = 2.35; name.scale.set(1.5, .47, 1); name.userData.agentId = a.id; group.add(name);
+    const bubble=new T.Sprite(new T.SpriteMaterial({transparent:true,depthTest:false}));bubble.position.set(0,3.05,0);bubble.scale.set(3.3,1.05,1);bubble.visible=false;group.add(bubble);
     const paddle=new T.Group();arms[1].add(paddle);paddle.position.set(0,-.48,-.03);
     cylinder(.1,.1,.045,"#c78072",0,-.07,0,paddle).rotation.x=Math.PI/2;
     box(.045,.14,.045,"#b89a73",0,.04,0,paddle);paddle.visible=false;
@@ -237,7 +239,7 @@ export function createOfficeScene(host: HTMLElement, onSelect: (id: string) => v
     const controller=new T.Group();group.add(controller);controller.position.set(0,1.05,-.44);
     box(.36,.13,.16,"#f0eee6",0,0,0,controller);box(.075,.16,.16,"#8cb0bb",-.21,0,0,controller);box(.075,.16,.16,"#c78171",.21,0,0,controller);
     for(const x of [-.1,.1]) ball(.035,"#4a5655",x,.085,-.02,controller);controller.visible=false;
-    return {group,arms,legs,ring,name,seat,state:a,target:seat.clone(),labelKey:`${a.name}:${a.status}`,zone:'work' as Zone,slot:0,route:[],trail:[seat.clone()],origin:{zone:'work' as Zone,slot:0,seat:seat.clone()},paddle,cup,controller,moving:false,phase:index*1.7};
+    return {bubble,bubbleUntil:0,gesture:"wave",group,arms,legs,ring,name,seat,state:a,target:seat.clone(),labelKey:`${a.name}:${a.status}`,zone:'work' as Zone,slot:0,route:[],trail:[seat.clone()],origin:{zone:'work' as Zone,slot:0,seat:seat.clone()},paddle,cup,controller,moving:false,phase:index*1.7};
   }
   let lastLifeKey="", lastCycle=-1;
   function emitLife() {
@@ -280,6 +282,7 @@ export function createOfficeScene(host: HTMLElement, onSelect: (id: string) => v
   }
   function disposePerson(p:Person) {
     p.group.traverse(obj=>{if(obj instanceof T.Mesh)obj.geometry.dispose();});
+    p.bubble.material.map?.dispose();p.bubble.material.dispose();
     p.name.material.map?.dispose();p.name.material.dispose();(p.ring.material as T.Material).dispose();
   }
   const raycaster = new T.Raycaster(); const pointer = new T.Vector2(); let startX = 0; let startY = 0;
@@ -289,7 +292,7 @@ export function createOfficeScene(host: HTMLElement, onSelect: (id: string) => v
     const r = renderer.domElement.getBoundingClientRect(); pointer.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1);
     raycaster.setFromCamera(pointer, camera);
     const hits = raycaster.intersectObjects([...people.values()].map(p => p.group), true);
-    for (const hit of hits) { let obj: T.Object3D | null = hit.object; while (obj) { if (obj.userData.agentId) { onSelect(obj.userData.agentId); return; } obj = obj.parent; } }
+    for (const hit of hits) { let visible=true;for(let node:T.Object3D|null=hit.object;node;node=node.parent){if(!node.visible){visible=false;break;}}if(!visible)continue;let obj: T.Object3D | null = hit.object; while (obj) { if (obj.userData.agentId) { onSelect(obj.userData.agentId); return; } obj = obj.parent; } }
   }
   renderer.domElement.addEventListener("pointerdown", down); renderer.domElement.addEventListener("pointerup", up);
   const resize = () => {
@@ -330,6 +333,8 @@ export function createOfficeScene(host: HTMLElement, onSelect: (id: string) => v
       p.group.visible=p.state.status!=='offline';
       if(!walking){p.group.rotation.y=p.zone==='pingpong'?(p.slot===0?-Math.PI/2:Math.PI/2):p.zone==='pantry'?(p.slot===0?Math.PI:-1.1):p.zone==='lounge'?(p.slot===0?-.25:.25):0;}
       p.paddle.visible=rest&&p.zone==='pingpong';p.cup.visible=rest&&p.zone==='pantry';p.controller.visible=rest&&p.zone==='gaming';
+      const reacting=elapsed<p.bubbleUntil;p.bubble.visible=reacting;
+      if(reacting&&p.gesture==="coffee")p.cup.visible=true;
       const t=elapsed+p.phase;
       p.arms.forEach((arm,i)=>{
         arm.rotation.z=0;
@@ -343,16 +348,28 @@ export function createOfficeScene(host: HTMLElement, onSelect: (id: string) => v
           p.state.status==='blocked'&&i===0?2.5+Math.sin(t*3)*.15:.08;
         if(rest&&p.zone==='pingpong'&&i===1)arm.rotation.z=Math.sin(elapsed*3.4+(p.slot?Math.PI:0))*.3;
       });
+      if(reacting&&!walking){p.arms[1].rotation.x=p.gesture==='coffee'?2:2.65;p.arms[1].rotation.z=reduce.matches?0:Math.sin(t*7)*.25;}
       p.legs.forEach((leg,i)=>{leg.rotation.x=reduce.matches?(seated?Math.PI/2:0):walking?Math.sin(t*9+i*Math.PI)*.52:seated?Math.PI/2:0;});
       if(!reduce.matches)p.ring.scale.setScalar(1+Math.sin(t*2)*.04);
       if(rest&&p.zone==='pingpong'&&!reduce.matches)p.group.position.z+=Math.sin(elapsed*3.4+(p.slot?Math.PI:0))*.09;
     }
+    screens.forEach((screen,i)=>{const a=current[i],p=a?people.get(a.id):undefined;screen.draw(a,p,elapsed,reduce.matches);});
     cat.position.set(-.55+Math.sin(elapsed*.16)*.22,0,Math.sin(elapsed*.1)*4.5);cat.rotation.y=Math.cos(elapsed*.1)>0?Math.PI:0;
     if(reduce.matches)cat.position.set(-.55,0,2.5);
     controls.update(); renderer.render(scene, camera);
   });
   return {
     update,
+    reactTo:(id:string,text:string,gesture:string)=>{
+      const p=people.get(id);if(!p)return;
+      const canvas=document.createElement('canvas');canvas.width=768;canvas.height=244;
+      const ctx=canvas.getContext('2d')!;ctx.fillStyle='#fffaf0';ctx.beginPath();ctx.roundRect(5,5,758,224,28);ctx.fill();
+      ctx.fillStyle='#3f594d';ctx.font='500 42px system-ui';ctx.textAlign='center';
+      const lines:string[]=[];let line='';for(const char of text){if(ctx.measureText(line+char).width>690){lines.push(line);line='';}line+=char;}if(line)lines.push(line);
+      lines.slice(0,4).forEach((value,i)=>ctx.fillText(value,384,68+i*44));
+      const tex=new T.CanvasTexture(canvas);tex.colorSpace=T.SRGBColorSpace;
+      p.bubble.material.map?.dispose();p.bubble.material.map=tex;p.bubble.material.needsUpdate=true;p.bubbleUntil=elapsed+7;p.gesture=gesture;
+    },
     focusZone:(zone:Zone)=>{const v=zoneDefinitions[zone]?.center;if(!v)return;controls.target.set(v[0],.6,v[2]);camera.position.copy(controls.target).add(new T.Vector3(17,18,23));camera.zoom=1.6;camera.updateProjectionMatrix();controls.update();},
     reset: () => { camera.position.set(17, 18, 23); camera.zoom = 1; camera.updateProjectionMatrix(); controls.target.set(0, .6, 0); controls.update(); },
     zoom: (amount: number) => { camera.zoom = T.MathUtils.clamp(camera.zoom + amount, .65, 1.9); camera.updateProjectionMatrix(); },

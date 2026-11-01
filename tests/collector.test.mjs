@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { validateUpdate } from '../lib/agent-protocol.mjs';
 import { agentId, normalizeHook, normalizeTranscript, toAgent, acceptEvent } from '../bridge/collector/events.mjs';
+import { deriveWriteToken } from '../bridge/collector/write-auth.mjs';
 import { createCollector } from '../bridge/collector/server.mjs';
 import { setup, mergeHooks, makeCommand, MARKER } from '../bridge/collector/setup.mjs';
 import { CodexTranscriptReader } from '../bridge/collector/transcripts.mjs';
@@ -36,8 +37,8 @@ test('same session deduplicates App and CLI; device and provider remain distinct
   assert.equal(acceptEvent({source:'hook',status:'working',observedAt:200},{source:'hook',status:'done',observedAt:100}),false);
 });
 test('collector enforces localhost credentials, rejects browser posts, strips unknown fields and retries', async()=>{
-  let fail=true; const uploaded=[];
-  const collector=createCollector(config,{fetcher:async(url,options)=>{ if(fail) throw new Error('offline');uploaded.push(JSON.parse(options.body));return {ok:true,json:async()=>({ok:true})}; }});
+  let fail=true; const uploaded=[];let cloudHeaders;
+  const collector=createCollector(config,{token:'test-service',fetcher:async(url,options)=>{cloudHeaders=options.headers; if(fail) throw new Error('offline');uploaded.push(JSON.parse(options.body));return {ok:true,json:async()=>({ok:true})}; }});
   await collector.start(); const port=collector.server.address().port, endpoint=`http://127.0.0.1:${port}`;
   try {
     assert.equal((await fetch(`${endpoint}/health`)).status,401);
@@ -47,6 +48,7 @@ test('collector enforces localhost credentials, rejects browser posts, strips un
     assert.equal((await fetch(`${endpoint}/events`,{method:'POST',headers,body:JSON.stringify(event)})).status,202);
     await collector.flush(); assert.ok(collector.health().lastError);
     fail=false;await collector.flush(); assert.equal(collector.health().lastError,'');
+    assert.equal(cloudHeaders['X-Office-Token'],deriveWriteToken('test-service'));assert.notEqual(cloudHeaders['X-Office-Token'],'test-service');
     assert.equal(uploaded[0].agents.length,1); assert.equal(uploaded[0].device.id,'company-mac');
     assert.equal(JSON.stringify(uploaded).includes('DO NOT UPLOAD'),false);assert.equal(JSON.stringify(uploaded).includes('NEVER UPLOAD'),false);
     assert.equal((await fetch(`${endpoint}/events`,{method:'POST',headers,body:'x'.repeat(9000)})).status,413);

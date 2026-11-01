@@ -1,8 +1,9 @@
 import { env } from 'cloudflare:workers';
-import { agentStatements, cleanupStatements, readBoundedJson, errorResponse, HttpError } from '@/lib/server-office';
+import { agentStatements, cleanupStatements, readBoundedJson, errorResponse, HttpError, requireOfficeWriter } from '@/lib/server-office';
 export const dynamic = 'force-dynamic';
 export async function POST(request: Request) {
   try {
+    await requireOfficeWriter(request);
     if (!env.DB) throw new HttpError(503,'狀態儲存尚未設定');
     const raw=await readBoundedJson(request,65536), d=raw?.device;
     if (!d || typeof d.id!=='string' || !/^[a-z0-9_-]{1,40}$/.test(d.id) || typeof d.name!=='string' || !d.name.trim() || d.name.length>40 || !['win32','darwin','linux'].includes(d.platform) || !Array.isArray(d.tools) || d.tools.length>3 || d.tools.some((t:unknown)=>!['codex','claude','gemini'].includes(String(t)))) throw new HttpError(400,'裝置格式不正確');

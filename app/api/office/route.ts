@@ -1,13 +1,13 @@
 import { env } from 'cloudflare:workers';
 import { Agent, Activity, colors } from '@/lib/office-types';
 import { visibleStatus } from '@/lib/agent-protocol.mjs';
-import { agentStatements, cleanupStatements, readBoundedJson, errorResponse } from '@/lib/server-office';
+import { agentStatements, cleanupStatements, readBoundedJson, errorResponse, requireOfficeWriter } from '@/lib/server-office';
 import { humanName } from '@/lib/work-labels.mjs';
 import { attendanceFor } from '@/lib/office-attendance.mjs';
 
 export const dynamic = 'force-dynamic';
 const noStore = { 'Cache-Control':'no-store' };
-// Every route stays behind Sites' existing owner-private browser/service gate.
+// Public reads; every update independently authenticates the collector.
 export async function GET() {
   if (!env.DB) return Response.json({error:'狀態儲存尚未設定'},{status:503,headers:noStore});
   try {
@@ -25,6 +25,7 @@ export async function GET() {
 }
 export async function POST(request: Request) {
   try {
+    await requireOfficeWriter(request);
     if (!env.DB) return Response.json({error:'狀態儲存尚未設定'},{status:503});
     const raw=await readBoundedJson(request,4096); const now=Date.now();
     await env.DB.batch([...agentStatements(raw,now),...cleanupStatements()]);
