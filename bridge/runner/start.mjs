@@ -2,7 +2,7 @@ import { parseArgs } from 'node:util';
 import { readConfig,readSecretFromStdin } from '../collector/config.mjs';
 import { deriveRunnerToken,writeFingerprint } from '../collector/write-auth.mjs';
 import { readProjects } from './projects.mjs';
-import { prepareWorkspace,workspaceChanges,CodexRun,resultEnvelope } from './codex.mjs';
+import { prepareWorkspace,workspaceChanges,CodexRun,resultEnvelope,discoverCodexModels } from './codex.mjs';
 import { redact } from '../collector/telemetry.mjs';
 
 
@@ -14,6 +14,8 @@ if(values['fingerprint-stdin']){console.log(JSON.stringify({fingerprint:writeFin
 const config=await readConfig(values.config),projects=await readProjects(values.projects);
 const headers={'Content-Type':'application/json','OAI-Sites-Authorization':`Bearer ${token}`,'X-Office-Runner':deriveRunnerToken(token)};
 async function api(body){let text=JSON.stringify(body);if(text.length>58000)throw new Error('回報內容超過上限');const r=await fetch(new URL('/api/runner',config.url),{method:'POST',headers,body:text,redirect:'error',signal:AbortSignal.timeout(10000)});if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json();}
+let modelCatalog=[];try{modelCatalog=await discoverCodexModels();}catch(e){console.error(`無法取得本機 Codex 模型清單：${redact(e.message,180)}；請確認 Codex 已登入，並在修復後重啟執行器。`);}
+let modelCatalogDirty=modelCatalog.length>0;
 let active=null,polling=false,closing=false;
 async function launch(job){
   active={job,events:new Map(),ack:[],approval:null,approvalChanged:false,leaseUntil:Date.now()+80000,commands:new Set(),run:null,finished:null};const state=active;
@@ -40,7 +42,8 @@ async function report(){
 async function poll(){
   if(polling||closing)return;polling=true;
   try{
-    const result=await api({op:'poll',deviceId:config.deviceId,deviceName:config.deviceName,projects:projects.map(p=>({id:p.id,name:p.name})),active:active?[{id:active.job.id,leaseToken:active.job.lease_token}]:[]});
+    const request={op:'poll',deviceId:config.deviceId,deviceName:config.deviceName,projects:projects.map(p=>({id:p.id,name:p.name})),active:active?[{id:active.job.id,leaseToken:active.job.lease_token}]:[],...(modelCatalogDirty?{models:modelCatalog}:{})};
+    const result=await api(request);if(result.modelsSaved)modelCatalogDirty=false;
     if(active){const s=active,lease=result.leases.find(l=>l.id===s.job.id);if(lease)s.leaseUntil=Date.now()+80000;
       for(const command of result.commands){if(command.taskId!==s.job.id||s.commands.has(command.id))continue;try{if(!s.run&&command.kind!=='cancel')continue;if(command.kind==='cancel'&&!s.run)s.cancelled=true;await s.run?.command(command);s.commands.add(command.id);s.ack.push(command.id);}catch{}}
       if(!lease&&!s.finished){s.run?.stop();s.finished={outcome:'interrupted',result:'工作已取消或租約失效，請檢查本機變更。',diff:''};}

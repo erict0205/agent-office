@@ -35,6 +35,25 @@ export async function codexLaunch(platform=process.platform) {
   for(const shim of located){const script=join(dirname(shim),'node_modules','@openai','codex','bin','codex.js');try{await access(script);return {command:process.execPath,args:[script,'app-server','--listen','stdio://']};}catch{}}
   throw new Error('找不到可直接啟動的 Codex，請安裝官方 Codex CLI 或使用 WSL。');
 }
+export async function discoverCodexModels({spawnProcess=spawn}={}) {
+  const launch=await codexLaunch(),childEnv={...process.env};for(const key of Object.keys(childEnv))if(key.startsWith('OFFICE_')||key==='ACCESS_TOKEN')delete childEnv[key];
+  const child=spawnProcess(launch.command,launch.args,{env:childEnv,stdio:['pipe','pipe','pipe']});
+  const requests=new Map();let nextId=0,closed=false;
+  const lines=createInterface({input:child.stdout});
+  lines.on('line',line=>{let message;try{message=JSON.parse(line);}catch{return;}if(message.id===undefined||message.method)return;const request=requests.get(message.id);if(!request)return;clearTimeout(request.timer);requests.delete(message.id);message.error?request.reject(new Error(message.error.message??'Codex 回覆錯誤')):request.resolve(message.result);});
+  child.stderr.on('data',()=>{});
+  child.once('error',()=>{for(const request of requests.values()){clearTimeout(request.timer);request.reject(new Error('無法啟動 Codex app-server'));}requests.clear();});
+  child.once('exit',()=>{for(const request of requests.values()){clearTimeout(request.timer);request.reject(new Error('Codex app-server 提前結束'));}requests.clear();});
+  const rpc=(method,params={})=>new Promise((resolve,reject)=>{if(closed)return reject(new Error('Codex app-server 已關閉'));const id=++nextId,timer=setTimeout(()=>{requests.delete(id);reject(new Error(`${method} 沒有回應`));},30000);requests.set(id,{resolve,reject,timer});child.stdin.write(JSON.stringify({id,method,params})+'\n');});
+  try{
+    await rpc('initialize',{clientInfo:{name:'agent_office_managed',title:'Eric Agent Office',version:'0.4.0'},capabilities:{experimentalApi:true}});child.stdin.write(JSON.stringify({method:'initialized',params:{}})+'\n');
+    const account=await rpc('account/read',{refreshToken:false});if(!account.account)throw new Error('本機 Codex 尚未登入');
+    const catalog=await rpc('model/list',{}),models=(catalog.data??[]).map(model=>({id:String(model.model??model.id??''),name:String(model.displayName??model.name??model.model??model.id??''),isDefault:model.isDefault===true})).filter(model=>model.id&&model.name);
+    if(!models.length)throw new Error('Codex 沒有提供可用的模型清單');return models;
+  }finally{
+    closed=true;for(const request of requests.values()){clearTimeout(request.timer);request.reject(new Error('Codex app-server 已關閉'));}requests.clear();lines.close();child.kill('SIGTERM');
+  }
+}
 export class CodexRun {
   constructor({job,workspace,onEvent=()=>{},onApproval=()=>{},spawnProcess=spawn}) {this.job=job;this.workspace=workspace;this.onEvent=onEvent;this.onApproval=onApproval;this.spawnProcess=spawnProcess;this.requests=new Map();this.approvals=new Map();this.next=0;this.turnId=null;this.final='';this.ended=false;this.agentText=new Map();}
   send(message){if(this.child?.stdin.writable)this.child.stdin.write(JSON.stringify(message)+'\n');}
@@ -52,7 +71,7 @@ export class CodexRun {
     try{
       await this.rpc('initialize',{clientInfo:{name:'agent_office_managed',title:'Eric Agent Office',version:'0.3.0'},capabilities:{experimentalApi:true}});this.send({method:'initialized',params:{}});
       const account=await this.rpc('account/read',{refreshToken:false});if(!account.account)throw new Error('本機 Codex 尚未登入');
-      const catalog=await this.rpc('model/list',{}),selected=catalog.data?.find(m=>m.isDefault)??catalog.data?.[0];if(!selected)throw new Error('Codex 沒有回傳可用的模型清單');this.model=selected.model??selected.id;this.event('model','執行模型',this.model);
+      const catalog=await this.rpc('model/list',{}),models=catalog.data??[],selected=this.job.model_id?models.find(m=>(m.model??m.id)===this.job.model_id):models.find(m=>m.isDefault)??models[0];if(!selected)throw new Error(this.job.model_id?'這份工作指定的模型已不在本機清單，請重啟執行器並重新派工。':'Codex 沒有回傳可用的模型清單');this.model=selected.model??selected.id;this.event('model','執行模型',this.model);
       const thread=await this.rpc('thread/start',{model:this.model,cwd:this.workspace.folder,approvalPolicy:'on-request',approvalsReviewer:'user',sandbox:this.job.role==='review'?'read-only':'workspace-write'});this.threadId=thread.thread.id;
       this.event('workspace','獨立工作目錄',this.workspace);
       const turn=await this.rpc('turn/start',{threadId:this.threadId,input:[{type:'text',text:taskPrompt(this.job)}],outputSchema:schema});this.turnId=turn.turn.id;

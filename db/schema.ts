@@ -26,7 +26,7 @@ export const officeProjects = sqliteTable('office_projects', {
 export const officeTasks = sqliteTable('office_tasks', {
   id:text('id').primaryKey(), workflowId:text('workflow_id').notNull(), stage:integer('stage').notNull(),
   title:text('title').notNull(), prompt:text('prompt').notNull(), deviceId:text('device_id').notNull(), projectId:text('project_id').notNull(),
-  role:text('role').notNull(), status:text('status').notNull(), agentId:text('agent_id').notNull(),
+  role:text('role').notNull(), status:text('status').notNull(), agentId:text('agent_id').notNull(), modelId:text('model_id'), scheduleId:text('schedule_id'),
   createdAt:integer('created_at').notNull(), updatedAt:integer('updated_at').notNull(),
   leaseToken:text('lease_token'), leaseUntil:integer('lease_until'), attempt:integer('attempt').notNull().default(0),
   result:text('result').notNull().default(''), diff:text('diff').notNull().default(''), approval:text('approval'),
@@ -38,4 +38,19 @@ export const privateEvents = sqliteTable('private_events', {
 export const officeCommands = sqliteTable('office_commands', {
   id:text('id').primaryKey(), taskId:text('task_id').notNull(), kind:text('kind').notNull(), payload:text('payload').notNull(),
   createdAt:integer('created_at').notNull(), acknowledged:integer('acknowledged').notNull().default(0),
+});
+export const officeModels = sqliteTable('office_models', {
+  key:text('key').primaryKey(), deviceId:text('device_id').notNull(), modelId:text('model_id').notNull(),
+  name:text('name').notNull(), isDefault:integer('is_default').notNull().default(0), seenAt:integer('seen_at').notNull(),
+});
+export const officeSchedules = sqliteTable('office_schedules', {
+  id:text('id').primaryKey(), title:text('title').notNull(), prompt:text('prompt').notNull(), deviceId:text('device_id').notNull(),
+  projectId:text('project_id').notNull(), workflow:text('workflow').notNull(), role:text('role').notNull(), modelId:text('model_id').notNull(),
+  cadence:text('cadence').notNull(), weekday:integer('weekday').notNull(), minuteOfDay:integer('minute_of_day').notNull(), timezone:text('timezone').notNull(),
+  active:integer('active').notNull().default(1), nextRunAt:integer('next_run_at').notNull(), lastRunAt:integer('last_run_at'),
+  lastWorkflowId:text('last_workflow_id'), createdAt:integer('created_at').notNull(), updatedAt:integer('updated_at').notNull(),
+});
+export const officeScheduleRuns = sqliteTable('office_schedule_runs', {
+  runKey:text('run_key').primaryKey(), scheduleId:text('schedule_id').notNull(), scheduledAt:integer('scheduled_at').notNull(),
+  workflowId:text('workflow_id').notNull(), createdAt:integer('created_at').notNull(),
 });

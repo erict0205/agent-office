@@ -4,6 +4,7 @@ import { HttpError,agentStatements } from './server-office';
 import { db,bounded,taskSelect } from './server-control';
 import { telemetryStatements,trimTelemetry } from './server-telemetry';
 import { humanName } from './work-labels.mjs';
+import { nextScheduleAt } from './schedule-time.mjs';
 
 export async function requireRunner(request:Request) {
   if(!env.OFFICE_RUNNER_TOKEN_SHA256)throw new HttpError(503,'執行器憑證尚未設定');
@@ -21,8 +22,32 @@ export async function runnerMessage(body:any) {
       if(!/^[a-z0-9_-]{1,40}$/.test(p.id))throw new HttpError(400,'專案識別不正確');
       return database.prepare('INSERT INTO office_projects(key,device_id,project_id,name,seen_at) VALUES (?,?,?,?,?) ON CONFLICT(key) DO UPDATE SET name=excluded.name,seen_at=excluded.seen_at').bind(`${deviceId}:${p.id}`,deviceId,p.id,bounded(p.name,80),now);
     });
+    let modelsIncluded=false;
+    if(body.models!==undefined){
+      if(!Array.isArray(body.models)||!body.models.length||body.models.length>100)throw new HttpError(400,'執行器模型清單不正確');
+      const clean=body.models.map((m:any)=>({id:bounded(m.id,120),name:bounded(m.name,120),isDefault:m.isDefault===true}));
+      if(clean.some((m:any)=>!m.id||!m.name)||new Set(clean.map((m:any)=>m.id)).size!==clean.length)throw new HttpError(400,'執行器模型清單不正確');
+      statements.push(database.prepare('DELETE FROM office_models WHERE device_id=?').bind(deviceId));
+      for(const model of clean)statements.push(database.prepare('INSERT INTO office_models(key,device_id,model_id,name,is_default,seen_at) VALUES (?,?,?,?,?,?)').bind(`${deviceId}:${model.id}`,deviceId,model.id,model.name,model.isDefault?1:0,now));
+      modelsIncluded=true;
+    }
     statements.push(database.prepare("UPDATE office_tasks SET status='stale',updated_at=? WHERE status IN ('running','blocked') AND lease_until<?").bind(now,now));
     await database.batch(statements);
+    const projectIds=new Set(body.projects.map((p:any)=>p.id));
+    const due=(await database.prepare('SELECT * FROM office_schedules WHERE device_id=? AND active=1 AND next_run_at<=? ORDER BY next_run_at LIMIT 20').bind(deviceId,now).all()).results as any[];
+    for(const schedule of due){
+      if(!projectIds.has(schedule.project_id))continue;
+      const roles=schedule.workflow==='pipeline'?['development','testing','review']:[schedule.role];
+      if(roles.some((r:string)=>!['development','testing','review'].includes(r)))continue;
+      const scheduledAt=schedule.next_run_at,runKey=`${schedule.id}:${scheduledAt}`;
+      await database.prepare('INSERT OR IGNORE INTO office_schedule_runs(run_key,schedule_id,scheduled_at,workflow_id,created_at) VALUES (?,?,?,?,?)').bind(runKey,schedule.id,scheduledAt,crypto.randomUUID(),now).run();
+      const run=await database.prepare('SELECT workflow_id AS workflowId FROM office_schedule_runs WHERE run_key=?').bind(runKey).first<any>();if(!run)continue;
+      const nextRunAt=nextScheduleAt({cadence:schedule.cadence,weekday:schedule.weekday,minuteOfDay:schedule.minute_of_day,timezone:schedule.timezone},now),workflowId=run.workflowId;
+      const scheduledStatements:any[]=[];
+      roles.forEach((role:string,stage:number)=>scheduledStatements.push(database.prepare('INSERT OR IGNORE INTO office_tasks(id,workflow_id,stage,title,prompt,device_id,project_id,role,status,agent_id,model_id,schedule_id,created_at,updated_at) SELECT ?,?,?,title,prompt,device_id,project_id,?,?,?,model_id,id,?,? FROM office_schedules WHERE id=? AND active=1 AND next_run_at=?').bind(`${workflowId}-${stage}`,workflowId,stage,role,stage===0?'queued':'waiting',`managed-${workflowId}-${stage}`,now,now,schedule.id,scheduledAt)));
+      scheduledStatements.push(database.prepare('UPDATE office_schedules SET next_run_at=?,last_run_at=?,last_workflow_id=?,updated_at=? WHERE id=? AND active=1 AND next_run_at=?').bind(nextRunAt,scheduledAt,workflowId,now,schedule.id,scheduledAt));
+      await database.batch(scheduledStatements);
+    }
     const commands:any[]=[],leases:any[]=[];
     for(const active of body.active){
       const id=bounded(active.id,80),token=bounded(active.leaseToken,80);
@@ -45,7 +70,7 @@ export async function runnerMessage(body:any) {
         job={...claimed,previous:prior.results};
       }
     }
-    return {ok:true,job,commands,leases,at:now};
+    return {ok:true,job,commands,leases,modelsSaved:modelsIncluded,at:now};
   }
   if(body.op==='report') {
     const id=bounded(body.id,80),token=bounded(body.leaseToken,80);
